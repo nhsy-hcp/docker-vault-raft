@@ -1,0 +1,108 @@
+# https://taskfile.dev
+version: '3'
+
+dotenv:
+  - .env
+
+tasks:
+  default:
+    aliases: ["all"]
+    cmds:
+      - task: up
+      - task: unseal
+
+  up:
+    preconditions:
+      - test -f .env
+      - test -f docker-compose.yml
+    cmds:
+      - docker compose up -d --pull=missing
+      - sleep 5
+      - |
+        echo "Vault 1: http://localhost:8201"
+        echo "Vault 2: http://localhost:8202"
+        echo "Vault 3: http://localhost:8203"
+    silent: true
+
+  down:
+    cmds:
+      - task: stop
+
+  restart:
+    cmds:
+      - docker compose restart
+      - task: unseal
+      - task: raft
+
+  status:
+    cmds:
+      - vault status
+
+  init:
+    cmds:
+      - ./scripts/00_vault_init.sh
+
+  unseal:
+    cmds:
+      - ./scripts/20_vault_unseal.sh
+
+  backup:
+    cmds:
+      - vault operator raft snapshot save backup-`date +"%Y%m%d-%H%M"`.snap
+
+  rm:
+    aliases: ["clean"]
+    cmds:
+      - docker compose rm -sfv
+      - docker volume rm {{.STACK_NAME }}_vault1-data
+      - docker volume rm {{.STACK_NAME }}_vault2-data
+      - docker volume rm {{.STACK_NAME }}_vault3-data
+    ignore_error: true
+    vars:
+      STACK_NAME:
+        sh: basename "`pwd`"
+
+  metrics:
+      cmds:
+        - |
+          curl -s --header "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/sys/metrics?format=prometheus"
+          
+  logs:
+    cmds:
+      - docker compose logs -f --tail=1000
+
+  stop:
+    cmds:
+      - docker compose stop
+
+  ui:
+    cmds:
+      - open http://localhost:8201
+      - open http://localhost:8202
+      - open http://localhost:8203
+      - open http://localhost:8080/stats
+      - ./scripts/10_vault_vars.sh
+
+  benchmark:
+    cmds:
+      - vault namespace create vault-benchmark
+      - vault-benchmark run -config=./benchmark/config.hcl
+    ignore_error: true
+
+  pull:
+    cmds:
+      - docker compose pull
+    silent: true
+
+  raft:
+    cmds:
+      - vault operator raft list-peers -address=$VAULT_ADDR1
+      - vault operator raft list-peers -address=$VAULT_ADDR2
+      - vault operator raft list-peers -address=$VAULT_ADDR3
+    ignore_error: true
+
+  df:
+    cmds:
+      - docker compose exec vault1 df -h
+      - docker compose exec vault2 df -h
+      - docker compose exec vault3 df -h

@@ -1,0 +1,86 @@
+# Recommend creating a .env file in the root directory for these:
+# VAULT_VERSION=1.19-ent
+# VAULT_LOG_LEVEL=info
+
+services:
+  vault1:
+    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
+    container_name: docker-vault-raft-1
+    restart: no
+    ports:
+      - "8201:8201"
+    env_file:
+      - .env # Contains VAULT_ADDR, VAULT_LICENSE
+    environment:
+      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./volumes/vault/raft1.hcl:/vault/config/raft.hcl:ro
+      - vault1-data:/vault/file
+      - type: tmpfs
+        target: /vault/logs
+        tmpfs:
+          size: 104857600 #100 MB
+    command: server
+
+  vault2:
+    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
+    container_name: docker-vault-raft-2
+    restart: no
+    ports:
+      - "8202:8202"
+    env_file:
+      - .env # Contains VAULT_ADDR, VAULT_LICENSE
+    environment:
+      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./volumes/vault/raft2.hcl:/vault/config/raft.hcl:ro
+      - vault2-data:/vault/file
+      - type: tmpfs
+        target: /vault/logs
+        tmpfs:
+          size: 104857600 #100 MB
+    command: server
+
+  vault3:
+    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
+    container_name: docker-vault-raft-3
+    restart: no
+    ports:
+      - "8203:8203"
+    env_file:
+      - .env # Contains VAULT_ADDR, VAULT_LICENSE
+    environment:
+      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./volumes/vault/raft3.hcl:/vault/config/raft.hcl:ro
+      - vault3-data:/vault/file
+      - type: tmpfs
+        target: /vault/logs
+        tmpfs:
+          size: 104857600 #100 MB
+    command: server
+
+  haproxy:
+      image: haproxy:latest
+      container_name: docker-vault-haproxy
+      restart: unless-stopped
+      ports:
+        - "8200:8200"
+        - "8080:8080"
+      volumes:
+        - ./volumes/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+networks:
+  default:
+    name: docker-vault-raft
+
+volumes:
+  vault1-data:
+  vault2-data:
+  vault3-data:
