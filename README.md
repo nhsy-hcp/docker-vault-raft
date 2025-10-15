@@ -1,69 +1,154 @@
-# docker-vault-raft
+# Docker Vault Raft Cluster with TLS
 
-## Overview
+A production-ready HashiCorp Vault Enterprise cluster with end-to-end TLS encryption, Raft consensus storage, and HAProxy load balancing.
 
-This repository provides a Docker Compose stack for running a Vault Enterprise cluster with integrated raft storage and HAProxy load balancer.
+## Features
+
+- **3-node Vault cluster** with automatic leader election
+- **End-to-end TLS encryption** using self-signed certificates
+- **HAProxy load balancer** with TLS passthrough
+- **Raft consensus storage** for high availability
+- **Automated certificate management**
+- **Health-aware load balancing**
 
 ## Prerequisites
 
 - [Docker](https://www.docker.com/get-started)
-- [go-task](https://taskfile.dev) and [jq](https://stedolan.github.io/jq/) (for automation scripts)
+- [Task](https://taskfile.dev)
+- Vault Enterprise license
 
-Note: `/vault/logs` is mounted as a tmpfs with a maximum size of 100MB.
-
-Install prerequisites on macOS:
-```sh
-brew install go-task jq
+Install on macOS:
+```bash
+brew install go-task
 ```
 
-## Setup
-Setup
-Clone the repository:
-```sh
-git clone https://github.com/nhsy-hcp/docker-vault-raft.git
-cd docker-vault-raft
-```
-Create a .env file in the root directory:
-```sh
+## Quick Start
+
+### 1. Setup Environment
+
+```bash
+# Copy environment template
 cp .env.example .env
-# Edit .env to add your Vault license
+
+# Edit .env and add your Vault license
+VAULT_LICENSE=your-license-here
 ```
-Start the stack:
-```sh
+
+### 2. Generate TLS Certificates
+
+```bash
+# Generate all certificates (CA + server certs)
+task certs:all
+```
+
+### 3. Start Cluster
+
+```bash
+# Start all containers
 task up
 ```
-Initialize and unseal Vault:
-```sh
-task init
-task unseal
+
+### 4. Initialize and Unseal Vault
+
+```bash
+# Initialize Vault (first time only)
+task vault:init
+
+# Unseal all nodes
+task vault:unseal
+```
+
+### 5. Verify Cluster
+
+```bash
+# Check cluster status
+task vault:status
+
+# View raft peers
+task vault:raft
+```
+
+## Access Points
+
+All connections use HTTPS with TLS:
+
+- **Vault Node 1**: https://localhost:8201
+- **Vault Node 2**: https://localhost:8202
+- **Vault Node 3**: https://localhost:8203
+- **HAProxy**: https://localhost:8200
+- **HAProxy Stats**: http://localhost:8080/stats (admin/changeme)
+
+## Common Commands
+
+**Certificate Management:**
+```bash
+task certs:all      # Generate all certificates
+task certs:verify   # Verify certificates
+task certs:renew    # Renew expiring certificates
+```
+
+**Cluster Operations:**
+```bash
+task up             # Start cluster
+task down           # Stop cluster
+task restart        # Restart cluster (auto-unseals)
+task clean          # Remove containers and volumes
+```
+
+**Vault Operations:**
+```bash
+task vault:init     # Initialize Vault
+task vault:unseal   # Unseal all nodes
+task vault:status   # Check status
+task vault:raft     # Show raft peers
+```
+
+**Monitoring:**
+```bash
+task logs           # View all logs
+task health         # Health check
+task metrics        # Prometheus metrics
+```
+
+**Testing:**
+```bash
+task test:tls       # Test TLS connections
+task test:cluster   # Test cluster formation
+task test:failover  # Test HA failover
+```
+
+## Security Notes
+
+- Certificate files and unseal keys are automatically excluded from git
+- Root CA is valid for 10 years
+- Server certificates are valid for 1 year
+- Private keys have 600 permissions
+- TLS 1.2+ with strong cipher suites
+
+## Architecture
+
+```
+Client → HAProxy:8200 (TLS Passthrough) →
+    ├─ vault-1:8201 (Raft Node, TLS)
+    ├─ vault-2:8202 (Raft Node, TLS)
+    └─ vault-3:8203 (Raft Node, TLS)
+```
+
+## Troubleshooting
+
+**Vault is sealed:**
+```bash
+task vault:unseal
+```
+
+**Certificate issues:**
+```bash
+task certs:verify
+```
+
+**View logs:**
+```bash
 task logs
 ```
-Vault token is automatically added to the .env file with `task init`. Load the environment variables:
-```sh
-source .env
-vault token lookup
-```
 
-Accessing Services
-- Vault 1 UI: http://localhost:8201
-- Vault 2 UI: http://localhost:8202
-- Vault 3 UI: http://localhost:8200
-- HAProxy LB: http://localhost:8200
-- HAProxy Stats: http://localhost:8080/stats
-
-## Common Tasks
-Start stack: `task up`
-
-Stop stack: `task stop`
-
-View logs: `task logs`
-
-View raft status: `task raft`
-
-Run benchmark: `task benchmark`
-
-Check Vault status: `task status`
-
-Delete cluster: `task clean` or `task rm`
-
-Open UI in browser: `task ui`
+For detailed documentation, see `CLAUDE.md`.

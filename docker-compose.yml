@@ -1,86 +1,125 @@
-# Recommend creating a .env file in the root directory for these:
-# VAULT_VERSION=1.19-ent
-# VAULT_LOG_LEVEL=info
+x-vault-common: &vault-common
+  image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
+  restart: unless-stopped
+  cap_add:
+    - IPC_LOCK
+  networks:
+    - vault-network
+  env_file:
+    - .env
+  environment: &vault-env
+    VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info}
+    VAULT_CACERT: "/vault/certs/ca.crt"
 
 services:
-  vault1:
-    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
-    container_name: docker-vault-raft-1
-    restart: no
+  vault-1:
+    <<: *vault-common
+    container_name: vault-1
     ports:
-      - "8201:8201"
-    env_file:
-      - .env # Contains VAULT_ADDR, VAULT_LICENSE
-    environment:
-      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
-    cap_add:
-      - IPC_LOCK
+      - "8201:8200"
     volumes:
-      - ./volumes/vault/raft1.hcl:/vault/config/raft.hcl:ro
-      - vault1-data:/vault/file
-      - type: tmpfs
-        target: /vault/logs
-        tmpfs:
-          size: 104857600 #100 MB
+      - vault-1-data:/vault/file
+    configs:
+      - source: vault-1-config
+        target: /vault/config/raft.hcl
+      - source: ca-cert
+        target: /vault/certs/ca.crt
+      - source: vault-1-cert
+        target: /vault/certs/vault-1.crt
+    secrets:
+      - source: vault-1-key
+        target: /vault/certs/vault-1.key
+        mode: 0600
     command: server
 
-  vault2:
-    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
-    container_name: docker-vault-raft-2
-    restart: no
+  vault-2:
+    <<: *vault-common
+    container_name: vault-2
     ports:
-      - "8202:8202"
-    env_file:
-      - .env # Contains VAULT_ADDR, VAULT_LICENSE
-    environment:
-      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
-    cap_add:
-      - IPC_LOCK
+      - "8202:8200"
     volumes:
-      - ./volumes/vault/raft2.hcl:/vault/config/raft.hcl:ro
-      - vault2-data:/vault/file
-      - type: tmpfs
-        target: /vault/logs
-        tmpfs:
-          size: 104857600 #100 MB
+      - vault-2-data:/vault/file
+    configs:
+      - source: vault-2-config
+        target: /vault/config/raft.hcl
+      - source: ca-cert
+        target: /vault/certs/ca.crt
+      - source: vault-2-cert
+        target: /vault/certs/vault-2.crt
+    secrets:
+      - source: vault-2-key
+        target: /vault/certs/vault-2.key
+        mode: 0600
     command: server
 
-  vault3:
-    image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
-    container_name: docker-vault-raft-3
-    restart: no
+  vault-3:
+    <<: *vault-common
+    container_name: vault-3
     ports:
-      - "8203:8203"
-    env_file:
-      - .env # Contains VAULT_ADDR, VAULT_LICENSE
-    environment:
-      VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info} # Default to 'info', allow override via .env
-    cap_add:
-      - IPC_LOCK
+      - "8203:8200"
     volumes:
-      - ./volumes/vault/raft3.hcl:/vault/config/raft.hcl:ro
-      - vault3-data:/vault/file
-      - type: tmpfs
-        target: /vault/logs
-        tmpfs:
-          size: 104857600 #100 MB
+      - vault-3-data:/vault/file
+    configs:
+      - source: vault-3-config
+        target: /vault/config/raft.hcl
+      - source: ca-cert
+        target: /vault/certs/ca.crt
+      - source: vault-3-cert
+        target: /vault/certs/vault-3.crt
+    secrets:
+      - source: vault-3-key
+        target: /vault/certs/vault-3.key
+        mode: 0600
     command: server
 
   haproxy:
-      image: haproxy:latest
-      container_name: docker-vault-haproxy
-      restart: unless-stopped
-      ports:
-        - "8200:8200"
-        - "8080:8080"
-      volumes:
-        - ./volumes/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    image: haproxy:lts-alpine
+    container_name: haproxy
+    restart: unless-stopped
+    networks:
+      - vault-network
+    ports:
+      - "8200:8200"
+      - "8080:8080"
+    configs:
+      - source: haproxy-config
+        target: /usr/local/etc/haproxy/haproxy.cfg
+    depends_on:
+      - vault-1
+      - vault-2
+      - vault-3
 
-networks:
-  default:
-    name: docker-vault-raft
+configs:
+  vault-1-config:
+    file: ./configs/vault/raft1.hcl
+  vault-2-config:
+    file: ./configs/vault/raft2.hcl
+  vault-3-config:
+    file: ./configs/vault/raft3.hcl
+  haproxy-config:
+    file: ./configs/haproxy/haproxy.cfg
+  ca-cert:
+    file: ./certs/ca/ca.crt
+  vault-1-cert:
+    file: ./certs/vault-1/vault-1.crt
+  vault-2-cert:
+    file: ./certs/vault-2/vault-2.crt
+  vault-3-cert:
+    file: ./certs/vault-3/vault-3.crt
+
+secrets:
+  vault-1-key:
+    file: ./certs/vault-1/vault-1.key
+  vault-2-key:
+    file: ./certs/vault-2/vault-2.key
+  vault-3-key:
+    file: ./certs/vault-3/vault-3.key
 
 volumes:
-  vault1-data:
-  vault2-data:
-  vault3-data:
+  vault-1-data:
+  vault-2-data:
+  vault-3-data:
+
+networks:
+  vault-network:
+    name: ${COMPOSE_PROJECT_NAME:-vault}

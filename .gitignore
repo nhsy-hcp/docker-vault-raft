@@ -1,3 +1,31 @@
+# environment files with secrets
+.env
 **/.env
-.idea/
+
+# vault initialization files
 vault-init.json
+root-token.txt
+unseal-keys.json
+
+# project documentation
+CLAUDE.md
+
+# certificates and keys (keep structure, ignore keys)
+certs/**/*.key
+certs/**/*.csr
+certs/ca/ca.srl
+
+# backup files
+backups/
+*.backup
+*.snap
+
+# ide
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# os
+.DS_Store
+Thumbs.db

@@ -4,105 +4,227 @@ version: '3'
 dotenv:
   - .env
 
+vars:
+  CA_DIR: certs/ca
+  CERT_VALIDITY_DAYS: 365
+  CA_VALIDITY_DAYS: 3650
+
 tasks:
   default:
     aliases: ["all"]
+    desc: start cluster and unseal
     cmds:
       - task: up
-      - task: unseal
+      - sleep 10
+      - task: vault:unseal
 
+  # certificate management
+  certs:init:
+    desc: create certificate directory structure
+    cmds:
+      - bash scripts/certs/init.sh
+
+  certs:ca:
+    desc: generate root ca
+    cmds:
+      - bash scripts/certs/generate-ca.sh
+    deps: [certs:init]
+
+  certs:server:
+    desc: generate all server certificates
+    cmds:
+      - bash scripts/certs/generate-server.sh
+    deps: [certs:ca]
+
+  certs:verify:
+    desc: verify certificates
+    cmds:
+      - bash scripts/certs/verify.sh
+
+  certs:renew:
+    desc: renew expiring certificates
+    cmds:
+      - bash scripts/certs/renew.sh
+
+  certs:all:
+    desc: generate all certificates (ca + servers)
+    cmds:
+      - task: certs:ca
+      - task: certs:server
+      - task: certs:verify
+
+  # cluster management
   up:
+    desc: start the cluster
     preconditions:
       - test -f .env
       - test -f docker-compose.yml
+      - sh: test -f certs/ca/ca.crt
+        msg: "certificates not found. run: task certs:all"
     cmds:
       - docker compose up -d --pull=missing
       - sleep 5
       - |
-        echo "Vault 1: http://localhost:8201"
-        echo "Vault 2: http://localhost:8202"
-        echo "Vault 3: http://localhost:8203"
+        echo "vault nodes:"
+        echo "  vault-1: https://localhost:8201"
+        echo "  vault-2: https://localhost:8202"
+        echo "  vault-3: https://localhost:8203"
+        echo "  haproxy: https://localhost:8200"
+        echo ""
+        echo "haproxy stats: http://localhost:8080/stats"
     silent: true
 
   down:
+    desc: stop the cluster
     cmds:
-      - task: stop
+      - docker compose down
 
   restart:
+    desc: restart the cluster
     cmds:
       - docker compose restart
-      - task: unseal
-      - task: raft
-
-  status:
-    cmds:
-      - vault status
-
-  init:
-    cmds:
-      - ./scripts/00_vault_init.sh
-
-  unseal:
-    cmds:
-      - ./scripts/20_vault_unseal.sh
-
-  backup:
-    cmds:
-      - vault operator raft snapshot save backup-`date +"%Y%m%d-%H%M"`.snap
-
-  rm:
-    aliases: ["clean"]
-    cmds:
-      - docker compose rm -sfv
-      - docker volume rm {{.STACK_NAME }}_vault1-data
-      - docker volume rm {{.STACK_NAME }}_vault2-data
-      - docker volume rm {{.STACK_NAME }}_vault3-data
-    ignore_error: true
-    vars:
-      STACK_NAME:
-        sh: basename "`pwd`"
-
-  metrics:
-      cmds:
-        - |
-          curl -s --header "X-Vault-Token: $VAULT_TOKEN" "$VAULT_ADDR/v1/sys/metrics?format=prometheus"
-          
-  logs:
-    cmds:
-      - docker compose logs -f --tail=1000
+      - sleep 10
+      - task: vault:unseal
+      - task: vault:raft
 
   stop:
+    desc: stop the cluster (without removing)
     cmds:
       - docker compose stop
 
-  ui:
+  clean:
+    desc: clean up containers and volumes
+    aliases: ["rm"]
     cmds:
-      - open http://localhost:8201
-      - open http://localhost:8202
-      - open http://localhost:8203
-      - open http://localhost:8080/stats
-      - ./scripts/10_vault_vars.sh
-
-  benchmark:
-    cmds:
-      - vault namespace create vault-benchmark
-      - vault-benchmark run -config=./benchmark/config.hcl
+      - docker compose down -v
     ignore_error: true
 
+  clean:all:
+    desc: clean up everything including certificates
+    cmds:
+      - docker compose down -v
+      - rm -rf certs/*/
+      - rm -f vault-init.json
+    ignore_error: true
+
+  # vault operations
+  vault:init:
+    desc: initialize vault
+    cmds:
+      - bash scripts/vault/init.sh
+
+  vault:config:
+    desc: configure vault settings (audit, quotas, token ttls)
+    cmds:
+      - bash scripts/vault/config.sh
+
+  vault:unseal:
+    desc: unseal all vault nodes
+    cmds:
+      - bash scripts/vault/unseal.sh
+
+  vault:status:
+    desc: check status of all nodes
+    cmds:
+      - bash scripts/vault/status.sh
+
+  vault:raft:
+    desc: show raft peer status
+    cmds:
+      - bash scripts/vault/raft-peers.sh
+
+  vault:all:
+    desc: complete vault setup (start, init, unseal, configure)
+    cmds:
+      - task: up
+      - task: vault:init
+      - task: vault:unseal
+      - task: vault:config
+      - task: vault:raft
+
+  # backup and restore
+  backup:
+    desc: create raft snapshot backup
+    cmds:
+      - vault operator raft snapshot save backup-`date +"%Y%m%d-%H%M"`.snap
+
+  # monitoring and logs
+  logs:
+    desc: view logs
+    cmds:
+      - docker compose logs -f --tail=1000 {{.CLI_ARGS}}
+
+  logs:vault:
+    desc: view vault logs only
+    cmds:
+      - docker compose logs -f --tail=1000 vault-1 vault-2 vault-3
+
+  logs:haproxy:
+    desc: view haproxy logs only
+    cmds:
+      - docker compose logs -f --tail=1000 haproxy
+
+  health:
+    desc: health check via haproxy
+    cmds:
+      - curl --cacert certs/ca/ca.crt https://localhost:8200/v1/sys/health
+
+  metrics:
+    desc: fetch prometheus metrics
+    cmds:
+      - |
+        curl -s --cacert certs/ca/ca.crt \
+          --header "X-Vault-Token: $VAULT_TOKEN" \
+          "https://localhost:8201/v1/sys/metrics?format=prometheus"
+
+  # testing
+  test:tls:
+    desc: test tls connections
+    cmds:
+      - bash scripts/test/tls.sh
+
+  test:cluster:
+    desc: test cluster formation
+    cmds:
+      - bash scripts/test/cluster.sh
+
+  test:failover:
+    desc: test failover
+    cmds:
+      - bash scripts/test/failover.sh
+
+  test:all:
+    desc: run all tests
+    cmds:
+      - task: test:tls
+      - task: test:cluster
+      - task: test:failover
+
+  # utilities
+  ui:
+    desc: open vault ui and haproxy stats in browser
+    cmds:
+      - open https://localhost:8201
+      - open https://localhost:8202
+      - open https://localhost:8203
+      - open http://localhost:8080/stats
+
   pull:
+    desc: pull latest images
     cmds:
       - docker compose pull
     silent: true
 
-  raft:
-    cmds:
-      - vault operator raft list-peers -address=$VAULT_ADDR1
-      - vault operator raft list-peers -address=$VAULT_ADDR2
-      - vault operator raft list-peers -address=$VAULT_ADDR3
-    ignore_error: true
-
   df:
+    desc: check disk usage in containers
     cmds:
-      - docker compose exec vault1 df -h
-      - docker compose exec vault2 df -h
-      - docker compose exec vault3 df -h
+      - docker compose exec vault-1 df -h
+      - docker compose exec vault-2 df -h
+      - docker compose exec vault-3 df -h
+
+  benchmark:
+    desc: run vault benchmark
+    cmds:
+      - vault namespace create vault-benchmark || true
+      - vault-benchmark run -config=./benchmark/config.hcl
+
