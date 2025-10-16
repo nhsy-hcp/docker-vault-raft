@@ -46,12 +46,27 @@ tasks:
     cmds:
       - bash scripts/certs/renew.sh
 
-  certs:all:
+  # configuration management
+  config:certs:
     desc: generate all certificates (ca + servers)
     cmds:
       - task: certs:ca
       - task: certs:server
       - task: certs:verify
+
+  config:raft:
+    desc: generate vault raft configuration files from template
+    cmds:
+      - bash scripts/config/generate-raft.sh
+    preconditions:
+      - test -f templates/raft.tpl.hcl
+
+  # setup
+  config:all:
+    desc: complete initial setup (certificates + configuration)
+    cmds:
+      - task: config:certs
+      - task: config:raft
 
   # cluster management
   up:
@@ -60,7 +75,7 @@ tasks:
       - test -f .env
       - test -f docker-compose.yml
       - sh: test -f certs/ca/ca.crt
-        msg: "certificates not found. run: task certs:all"
+        msg: "certificates not found. run: task config:certs"
     cmds:
       - docker compose up -d --pull=missing
       - sleep 5
@@ -228,3 +243,9 @@ tasks:
       - vault namespace create vault-benchmark || true
       - vault-benchmark run -config=./benchmark/config.hcl
 
+  loadtest:all:
+    cmds:
+      - vault status
+      - vault namespace create loadtest || echo loadtest namespace already exists
+      - ./scripts/load/generate_namespaces.py
+      - ./scripts/load/generate_leases.py

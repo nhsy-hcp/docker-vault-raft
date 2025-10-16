@@ -37,12 +37,13 @@ echo ""
 # extract root token and update .env file
 ROOT_TOKEN=$(jq -r '.root_token' vault-init.json)
 if [ -f "${PROJECT_ROOT}/.env" ]; then
-  if grep -q "^VAULT_TOKEN=" "${PROJECT_ROOT}/.env"; then
-    sed -i.bak "s|^VAULT_TOKEN=.*|VAULT_TOKEN=${ROOT_TOKEN}|g" "${PROJECT_ROOT}/.env"
+  if grep -q "^VAULT_TOKEN=" "${PROJECT_ROOT}/.env" || grep -q "^export VAULT_TOKEN=" "${PROJECT_ROOT}/.env"; then
+    # remove any existing VAULT_TOKEN lines (with or without export)
+    sed -i.bak "/^export VAULT_TOKEN=/d; /^VAULT_TOKEN=/d" "${PROJECT_ROOT}/.env"
     rm -f "${PROJECT_ROOT}/.env.bak"
-  else
-    echo "VAULT_TOKEN=${ROOT_TOKEN}" >> "${PROJECT_ROOT}/.env"
   fi
+  # add the token with export prefix
+  echo "export VAULT_TOKEN=${ROOT_TOKEN}" >> "${PROJECT_ROOT}/.env"
   echo "root token added to .env file"
 fi
 

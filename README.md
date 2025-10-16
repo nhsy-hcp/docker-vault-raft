@@ -1,6 +1,6 @@
-# Docker Vault Raft Cluster with TLS
+# Vault Compose Cluster with TLS
 
-A production-ready HashiCorp Vault Enterprise cluster with end-to-end TLS encryption, Raft consensus storage, and HAProxy load balancing.
+A HashiCorp Vault Enterprise cluster with end-to-end TLS encryption, Raft consensus storage, and HAProxy load balancing.
 
 ## Features
 
@@ -34,11 +34,11 @@ cp .env.example .env
 VAULT_LICENSE=your-license-here
 ```
 
-### 2. Generate TLS Certificates
+### 2. Generate Configuration
 
 ```bash
-# Generate all certificates (CA + server certs)
-task certs:all
+# Generate all certificates and configuration files
+task config:all
 ```
 
 ### 3. Start Cluster
@@ -80,9 +80,11 @@ All connections use HTTPS with TLS:
 
 ## Common Commands
 
-**Certificate Management:**
+**Configuration:**
 ```bash
-task certs:all      # Generate all certificates
+task config:all     # Generate all (certs + config)
+task config:certs   # Generate certificates only
+task config:raft    # Generate vault configs only
 task certs:verify   # Verify certificates
 task certs:renew    # Renew expiring certificates
 ```

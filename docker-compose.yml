@@ -21,7 +21,7 @@ services:
       - vault-1-data:/vault/file
     configs:
       - source: vault-1-config
-        target: /vault/config/raft.hcl
+        target: /vault/config/vault.hcl
       - source: ca-cert
         target: /vault/certs/ca.crt
       - source: vault-1-cert
@@ -29,7 +29,6 @@ services:
     secrets:
       - source: vault-1-key
         target: /vault/certs/vault-1.key
-        mode: 0600
     command: server
 
   vault-2:
@@ -41,7 +40,7 @@ services:
       - vault-2-data:/vault/file
     configs:
       - source: vault-2-config
-        target: /vault/config/raft.hcl
+        target: /vault/config/vault.hcl
       - source: ca-cert
         target: /vault/certs/ca.crt
       - source: vault-2-cert
@@ -49,7 +48,6 @@ services:
     secrets:
       - source: vault-2-key
         target: /vault/certs/vault-2.key
-        mode: 0600
     command: server
 
   vault-3:
@@ -61,7 +59,7 @@ services:
       - vault-3-data:/vault/file
     configs:
       - source: vault-3-config
-        target: /vault/config/raft.hcl
+        target: /vault/config/vault.hcl
       - source: ca-cert
         target: /vault/certs/ca.crt
       - source: vault-3-cert
@@ -69,7 +67,6 @@ services:
     secrets:
       - source: vault-3-key
         target: /vault/certs/vault-3.key
-        mode: 0600
     command: server
 
   haproxy:
@@ -91,11 +88,11 @@ services:
 
 configs:
   vault-1-config:
-    file: ./configs/vault/raft1.hcl
+    file: ./configs/vault/vault-1.hcl
   vault-2-config:
-    file: ./configs/vault/raft2.hcl
+    file: ./configs/vault/vault-2.hcl
   vault-3-config:
-    file: ./configs/vault/raft3.hcl
+    file: ./configs/vault/vault-3.hcl
   haproxy-config:
     file: ./configs/haproxy/haproxy.cfg
   ca-cert:
