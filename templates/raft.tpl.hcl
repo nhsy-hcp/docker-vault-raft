@@ -11,18 +11,21 @@ storage "raft" {
   node_id = "{{NODE_ID}}"
 
   retry_join {
+    leader_tls_servername = "vault-1"
     leader_api_addr = "https://vault-1:8200"
     leader_ca_cert_file = "/vault/certs/ca.crt"
     leader_client_cert_file = "/vault/certs/{{NODE_ID}}.crt"
     leader_client_key_file = "/vault/certs/{{NODE_ID}}.key"
   }
   retry_join {
+    leader_tls_servername = "vault-2"
     leader_api_addr = "https://vault-2:8200"
     leader_ca_cert_file = "/vault/certs/ca.crt"
     leader_client_cert_file = "/vault/certs/{{NODE_ID}}.crt"
     leader_client_key_file = "/vault/certs/{{NODE_ID}}.key"
   }
   retry_join {
+    leader_tls_servername = "vault-3"
     leader_api_addr = "https://vault-3:8200"
     leader_ca_cert_file = "/vault/certs/ca.crt"
     leader_client_cert_file = "/vault/certs/{{NODE_ID}}.crt"

@@ -10,6 +10,12 @@ x-vault-common: &vault-common
   environment: &vault-env
     VAULT_LOG_LEVEL: ${VAULT_LOG_LEVEL:-info}
     VAULT_CACERT: "/vault/certs/ca.crt"
+  healthcheck:
+    test: ["CMD", "wget", "--spider", "--no-check-certificate", "-q", "https://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"]
+    interval: 10s
+    timeout: 3s
+    retries: 3
+    start_period: 30s
 
 services:
   vault-1:
@@ -85,6 +91,12 @@ services:
       - vault-1
       - vault-2
       - vault-3
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/stats"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 configs:
   vault-1-config:
@@ -119,4 +131,4 @@ volumes:
 
 networks:
   vault-network:
-    name: ${COMPOSE_PROJECT_NAME:-vault}
+    name: ${COMPOSE_PROJECT_NAME}

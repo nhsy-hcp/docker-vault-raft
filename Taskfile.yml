@@ -8,6 +8,8 @@ vars:
   CA_DIR: certs/ca
   CERT_VALIDITY_DAYS: 365
   CA_VALIDITY_DAYS: 3650
+  COMPOSE_PROJECT_NAME:
+    sh: basename $(pwd)
 
 tasks:
   default:
@@ -15,7 +17,6 @@ tasks:
     desc: start cluster and unseal
     cmds:
       - task: up
-      - sleep 10
       - task: vault:unseal
 
   # certificate management
@@ -78,15 +79,34 @@ tasks:
         msg: "certificates not found. run: task config:certs"
     cmds:
       - docker compose up -d --pull=missing
-      - sleep 5
+      - sleep 20
       - |
-        echo "vault nodes:"
-        echo "  vault-1: https://localhost:8201"
-        echo "  vault-2: https://localhost:8202"
-        echo "  vault-3: https://localhost:8203"
-        echo "  haproxy: https://localhost:8200"
+        echo "health checks:"
+        # check vault-1
+        if curl -sf --cacert certs/ca/ca.crt https://localhost:8201 > /dev/null 2>&1; then
+          echo "  ✓ vault-1 (https://localhost:8201)"
+        else
+          echo "  ✗ vault-1 (https://localhost:8201) - not responding"
+        fi
+        # check vault-2
+        if curl -sf --cacert certs/ca/ca.crt https://localhost:8202 > /dev/null 2>&1; then
+          echo "  ✓ vault-2 (https://localhost:8202)"
+        else
+          echo "  ✗ vault-2 (https://localhost:8202) - not responding"
+        fi
+        # check vault-3
+        if curl -sf --cacert certs/ca/ca.crt https://localhost:8203 > /dev/null 2>&1; then
+          echo "  ✓ vault-3 (https://localhost:8203)"
+        else
+          echo "  ✗ vault-3 (https://localhost:8203) - not responding"
+        fi
+        # check haproxy
+        if curl -sf http://localhost:8080/stats > /dev/null 2>&1; then
+          echo "  ✓ haproxy (https://localhost:8080)"
+        else
+          echo "  ✗ haproxy (https://localhost:8080) - not responding"
+        fi
         echo ""
-        echo "haproxy stats: http://localhost:8080/stats"
     silent: true
 
   down:
@@ -150,18 +170,101 @@ tasks:
 
   vault:all:
     desc: complete vault setup (start, init, unseal, configure)
+    deps: ["up"]
     cmds:
-      - task: up
       - task: vault:init
       - task: vault:unseal
       - task: vault:config
       - task: vault:raft
 
-  # backup and restore
-  backup:
+  # snapshot management
+  snapshot:backup:
+    aliases: ["backup"]
     desc: create raft snapshot backup
     cmds:
-      - vault operator raft snapshot save backup-`date +"%Y%m%d-%H%M"`.snap
+      - vault operator raft snapshot save snapshots/backup-`date +"%Y%m%d-%H%M"`.snap
+      - echo "snapshot saved to snapshots/backup-`date +\"%Y%m%d-%H%M\"`.snap"
+
+  snapshot:inspect:
+    desc: inspect snapshot with default depth (depth=2)
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "usage: task snapshot:inspect -- <snapshot-file>"
+          exit 1
+        fi
+        vault operator raft snapshot inspect -format=json {{.CLI_ARGS}}
+
+  snapshot:inspect:detailed:
+    desc: inspect snapshot with full detail (depth=0, all keys)
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "usage: task snapshot:inspect:detailed -- <snapshot-file>"
+          exit 1
+        fi
+        vault operator raft snapshot inspect -depth=0 -format=json {{.CLI_ARGS}}
+
+  snapshot:convert:
+    desc: convert snapshot to json (depth=2, default aggregation)
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "usage: task snapshot:convert -- <snapshot-file>"
+          exit 1
+        fi
+        vault operator raft snapshot inspect -format=json {{.CLI_ARGS}} > {{.CLI_ARGS}}.json
+        echo "converted {{.CLI_ARGS}} to {{.CLI_ARGS}}.json"
+
+  snapshot:convert:detailed:
+    desc: convert snapshot to json with full detail (depth=0, all keys)
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "usage: task snapshot:convert:detailed -- <snapshot-file>"
+          exit 1
+        fi
+        vault operator raft snapshot inspect -depth=0 -format=json {{.CLI_ARGS}} > {{.CLI_ARGS}}.detailed.json
+        echo "converted {{.CLI_ARGS}} to {{.CLI_ARGS}}.detailed.json"
+
+  snapshot:analyze:
+    desc: analyze snapshot json file
+    cmds:
+      - python3 scripts/load/analyse.py {{.CLI_ARGS}}
+
+  snapshot:all:
+    desc: create snapshot with default depth (depth=2)
+    cmds:
+      - mkdir -p snapshots
+      - |
+        SNAPSHOT_FILE="snapshots/backup-`date +"%Y%m%d-%H%M"`.snap"
+        echo "creating snapshot: $SNAPSHOT_FILE"
+        vault operator raft snapshot save "$SNAPSHOT_FILE"
+        echo ""
+        echo "inspecting with default depth (depth=2)..."
+        vault operator raft snapshot inspect -format=json "$SNAPSHOT_FILE" > "$SNAPSHOT_FILE.json"
+        echo "created: $SNAPSHOT_FILE.json"
+        echo ""
+        echo "snapshot summary:"
+        vault operator raft snapshot inspect "$SNAPSHOT_FILE"
+
+  snapshot:all:detailed:
+    desc: create snapshot with full detail (depth=0, all keys)
+    cmds:
+      - mkdir -p snapshots
+      - |
+        SNAPSHOT_FILE="snapshots/backup-`date +"%Y%m%d-%H%M"`.snap"
+        echo "creating snapshot: $SNAPSHOT_FILE"
+        vault operator raft snapshot save "$SNAPSHOT_FILE"
+        echo ""
+        echo "inspecting with full detail (depth=0)..."
+        vault operator raft snapshot inspect -depth=0 -format=json "$SNAPSHOT_FILE" > "$SNAPSHOT_FILE.detailed.json"
+        echo "created: $SNAPSHOT_FILE.detailed.json"
+        echo ""
+        echo "snapshot summary:"
+        vault operator raft snapshot inspect "$SNAPSHOT_FILE"
+        echo ""
+        echo "note: detailed json file may be very large"
 
   # monitoring and logs
   logs:
@@ -219,23 +322,82 @@ tasks:
   ui:
     desc: open vault ui and haproxy stats in browser
     cmds:
-      - open https://localhost:8201
-      - open https://localhost:8202
-      - open https://localhost:8203
+      - open https://localhost:8200
       - open http://localhost:8080/stats
-
+      - task: vault:token
   pull:
     desc: pull latest images
     cmds:
       - docker compose pull
     silent: true
 
-  df:
+  data:df:
     desc: check disk usage in containers
     cmds:
       - docker compose exec vault-1 df -h
       - docker compose exec vault-2 df -h
       - docker compose exec vault-3 df -h
+
+  data:ls:
+    desc: list vault data directory contents for all nodes
+    cmds:
+      - |
+        echo "=== vault-1 ==="
+        docker compose exec vault-1 ls -lah /vault/file
+        echo ""
+      - |
+        echo "=== vault-2 ==="
+        docker compose exec vault-2 ls -lah /vault/file
+        echo ""
+      - |
+        echo "=== vault-3 ==="
+        docker compose exec vault-3 ls -lah /vault/file
+        echo ""
+    silent: true
+
+  data:destroy:
+    desc: stop vault container, delete raft folder and vault.db from volume
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Error: Vault node name required"
+          echo "Usage: task data:destroy -- <vault-node>"
+          echo "Example: task data:destroy -- vault-3"
+          exit 1
+        fi
+
+        NODE="{{.CLI_ARGS}}"
+        PROJECT="{{.COMPOSE_PROJECT_NAME}}"
+        VOLUME_NAME="${PROJECT}_${NODE}-data"
+
+        echo "=== Stopping container: $NODE ==="
+        docker compose stop $NODE
+        echo "Container $NODE stopped"
+
+        echo ""
+        echo "=== Inspecting volume before deletion: $VOLUME_NAME ==="
+        docker run --rm \
+          -v $VOLUME_NAME:/data:ro \
+          busybox ls -lah /data
+
+        echo ""
+        echo "=== Deleting raft folder and vault.db ==="
+        docker run --rm \
+          -v $VOLUME_NAME:/data \
+          busybox sh -c "rm -rf /data/raft /data/vault.db"
+        echo "Deleted: /data/raft"
+        echo "Deleted: /data/vault.db"
+
+        echo ""
+        echo "=== Inspecting volume after deletion: $VOLUME_NAME ==="
+        docker run --rm \
+          -v $VOLUME_NAME:/data:ro \
+          busybox ls -lah /data
+
+        echo ""
+        echo "Data destruction complete"
+        echo "To restart with fresh data: docker compose start $NODE"
+        echo "Note: You will need to re-initialize and unseal vault after restart"
 
   benchmark:
     desc: run vault benchmark
@@ -249,3 +411,29 @@ tasks:
       - vault namespace create loadtest || echo loadtest namespace already exists
       - ./scripts/load/generate_namespaces.py
       - ./scripts/load/generate_leases.py
+
+  shell:
+    desc: shell into a container
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Error: Vault node name required"
+          echo "Usage: task shell -- <vault-node>"
+          echo "Example: task shell -- vault-1"
+          exit 1
+        fi
+        NODE="{{.CLI_ARGS}}"
+        docker compose exec $NODE /bin/sh
+    silent: true
+
+  vault:token:
+    cmds:
+      - |
+        # copy vault token to clipboard on macos if available
+        if [ "$(uname)" = "Darwin" ] && [ -n "$VAULT_TOKEN" ]; then
+          echo "$VAULT_TOKEN" | pbcopy
+          echo "root token copied to clipboard"
+        elif [ "$(uname)" = "Darwin" ] && [ -z "$VAULT_TOKEN" ]; then
+          echo "note: VAULT_TOKEN not set (run 'task vault:init' first)"
+        fi
+    silent: true
