@@ -38,10 +38,9 @@ listener "tcp" {
   cluster_address = "0.0.0.0:8201"
   tls_cert_file   = "/vault/certs/{{NODE_ID}}.crt"
   tls_key_file    = "/vault/certs/{{NODE_ID}}.key"
-  tls_client_ca_file = "/vault/certs/ca.crt"
   tls_min_version = "tls12"
   tls_cipher_suites = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-  tls_require_and_verify_client_cert = false
+
   telemetry {
     unauthenticated_metrics_access = true
   }

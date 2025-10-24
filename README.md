@@ -2,11 +2,11 @@
 A HashiCorp Vault Enterprise cluster with end-to-end TLS encryption, Raft consensus storage, and HAProxy load balancing.
 
 ## Features
-- **3-node Vault cluster** with automatic leader election
-- **TLS encryption** using self-signed certificates
-- **HAProxy load balancer** with TLS passthrough
-- **Raft integrated storage** for high availability
-- **Load testing** scripts in [scripts/loadtest](scripts/loadtest) folder
+- 3-node Vault cluster
+- TLS encryption using self-signed CA certificates
+- HAProxy load balancer with TLS passthrough
+- Raft integrated storage
+- Load testing scripts in [scripts/loadtest](scripts/loadtest) folder
 
 ## Architecture
 ```
@@ -108,13 +108,11 @@ task vault:raft
 ```
 
 ## Access Points
-All connections use HTTPS with TLS:
-
+- **Vault LB (Leader)**: https://localhost:8200
 - **Vault Node 1**: https://localhost:8201
 - **Vault Node 2**: https://localhost:8202
 - **Vault Node 3**: https://localhost:8203
-- **HAProxy**: https://localhost:8200
-- **HAProxy Stats**: http://localhost:8080/stats (admin/changeme)
+- **HAProxy Stats**: http://localhost:8080/stats
 
 ## Common Commands
 **Configuration:**

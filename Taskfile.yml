@@ -79,6 +79,9 @@ tasks:
         msg: "certificates not found. run: task config:certs"
     cmds:
       - docker compose up -d --pull=missing
+      - echo ""
+      - echo "Waiting 20 seconds for startup..."
+      - echo ""
       - sleep 20
       - |
         echo "health checks:"
