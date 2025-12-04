@@ -1,5 +1,5 @@
 x-vault-common: &vault-common
-  image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.19-ent}
+  image: hashicorp/vault-enterprise:${VAULT_VERSION:-1.20-ent}
   restart: unless-stopped
   cap_add:
     - IPC_LOCK
@@ -25,6 +25,7 @@ services:
       - "8201:8200"
     volumes:
       - vault-1-data:/vault/file
+      - ./certs/vault-1/vault-1.key:/vault/certs/vault-1.key:ro
     configs:
       - source: vault-1-config
         target: /vault/config/vault.hcl
@@ -32,9 +33,6 @@ services:
         target: /vault/certs/ca.crt
       - source: vault-1-cert
         target: /vault/certs/vault-1.crt
-    secrets:
-      - source: vault-1-key
-        target: /vault/certs/vault-1.key
     command: server
 
   vault-2:
@@ -44,6 +42,7 @@ services:
       - "8202:8200"
     volumes:
       - vault-2-data:/vault/file
+      - ./certs/vault-2/vault-2.key:/vault/certs/vault-2.key:ro
     configs:
       - source: vault-2-config
         target: /vault/config/vault.hcl
@@ -51,9 +50,6 @@ services:
         target: /vault/certs/ca.crt
       - source: vault-2-cert
         target: /vault/certs/vault-2.crt
-    secrets:
-      - source: vault-2-key
-        target: /vault/certs/vault-2.key
     command: server
 
   vault-3:
@@ -63,6 +59,7 @@ services:
       - "8203:8200"
     volumes:
       - vault-3-data:/vault/file
+      - ./certs/vault-3/vault-3.key:/vault/certs/vault-3.key:ro
     configs:
       - source: vault-3-config
         target: /vault/config/vault.hcl
@@ -70,9 +67,6 @@ services:
         target: /vault/certs/ca.crt
       - source: vault-3-cert
         target: /vault/certs/vault-3.crt
-    secrets:
-      - source: vault-3-key
-        target: /vault/certs/vault-3.key
     command: server
 
   haproxy:
@@ -115,14 +109,6 @@ configs:
     file: ./certs/vault-2/vault-2.crt
   vault-3-cert:
     file: ./certs/vault-3/vault-3.crt
-
-secrets:
-  vault-1-key:
-    file: ./certs/vault-1/vault-1.key
-  vault-2-key:
-    file: ./certs/vault-2/vault-2.key
-  vault-3-key:
-    file: ./certs/vault-3/vault-3.key
 
 volumes:
   vault-1-data:

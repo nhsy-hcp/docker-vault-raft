@@ -81,11 +81,11 @@ EOF
     -extfile "${NODE_DIR}/${NODE}.cnf"
 
   # set appropriate permissions
-  chmod 600 "${NODE_DIR}/${NODE}.key"
+  chmod 644 "${NODE_DIR}/${NODE}.key"
   chmod 644 "${NODE_DIR}/${NODE}.crt"
 
   echo "  certificate generated successfully for ${NODE}"
-  echo "    private key: ${NODE_DIR}/${NODE}.key (permissions: 600)"
+  echo "    private key: ${NODE_DIR}/${NODE}.key (permissions: 644 fix volume mount permission denied error)"
   echo "    certificate: ${NODE_DIR}/${NODE}.crt (permissions: 644)"
 done
 
